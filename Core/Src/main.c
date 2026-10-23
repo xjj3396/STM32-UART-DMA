@@ -47,6 +47,8 @@ DMA_HandleTypeDef hdma_usart1_tx;
 uint8_t message1[]= "Hello World! This is DMA test.\r\n";
 uint16_t DMA_TX_SIZE = sizeof(message1) - 1;
 volatile uint8_t uart_tx_done = 0; //串口发送完成标志
+uint32_t last_tick = 0; //上次发送时间
+uint32_t led_last_tick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,13 +98,16 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-
   //1.启动串口dma传输
   if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
   {
     Error_Handler();
   }
 
+  //2.将时基时间更新为启动时间后，以启动时间为准
+  last_tick = HAL_GetTick();
+  led_last_tick = HAL_GetTick();
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -112,16 +117,22 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if(uart_tx_done)
+    if(uart_tx_done && (HAL_GetTick() - last_tick >= 1000U))
     {
-      uart_tx_done =0;
+      last_tick = HAL_GetTick();
+      uart_tx_done = 0;
 
-      HAL_Delay(1000); //延时1秒
       //2.再次启动串口dma传输
       if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
       {
         Error_Handler();
       }
+    }
+
+    if(HAL_GetTick() - led_last_tick >= 500U)
+    {
+      led_last_tick = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     }
 
   }
@@ -220,12 +231,23 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

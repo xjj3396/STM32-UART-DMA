@@ -42,6 +42,7 @@
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_tx;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 uint8_t message1[]= "Hello World! This is DMA test.\r\n";
@@ -49,6 +50,8 @@ uint16_t DMA_TX_SIZE = sizeof(message1) - 1;
 volatile uint8_t uart_tx_done = 0; //串口发送完成标志
 uint32_t last_tick = 0; //上次发送时间
 uint32_t led_last_tick = 0;
+uint8_t rx_buffer[64];
+volatile uint8_t uart_rx_done = 0; //串口接收完成标志
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,13 +101,19 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  //1.启动串口dma传输
-  if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
+  // //1.启动串口dma发送
+  // if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
+  // {
+  //   Error_Handler();
+  // }
+
+  //2.启动串口dma接收
+  if(HAL_UART_Receive_DMA(&huart1,rx_buffer,5) != HAL_OK)
   {
     Error_Handler();
   }
 
-  //2.将时基时间更新为启动时间后，以启动时间为准
+  //3.将时基时间更新为启动时间后，以启动时间为准
   last_tick = HAL_GetTick();
   led_last_tick = HAL_GetTick();
   
@@ -117,17 +126,17 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if(uart_tx_done && (HAL_GetTick() - last_tick >= 1000U))
-    {
-      last_tick = HAL_GetTick();
-      uart_tx_done = 0;
+    // if(uart_tx_done && (HAL_GetTick() - last_tick >= 1000U))
+    // {
+    //   last_tick = HAL_GetTick();
+    //   uart_tx_done = 0;
 
-      //2.再次启动串口dma传输
-      if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
-      {
-        Error_Handler();
-      }
-    }
+    //   //2.再次启动串口dma传输
+    //   if(HAL_UART_Transmit_DMA(&huart1, message1, DMA_TX_SIZE) != HAL_OK)
+    //   {
+    //     Error_Handler();
+    //   }
+    // }
 
     if(HAL_GetTick() - led_last_tick >= 500U)
     {
@@ -135,6 +144,28 @@ int main(void)
       HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     }
 
+    if(uart_rx_done)
+    {
+      uart_rx_done = 0;
+      //处理接收到的数据
+      //这里简单的将接收到的数据再发送出去
+      if(HAL_UART_Transmit_DMA(&huart1, rx_buffer, 5) != HAL_OK)
+      {
+        Error_Handler();
+      }
+    }
+
+    if(uart_tx_done)
+    {
+      uart_tx_done = 0;
+      //再次启动串口dma接收
+      if(HAL_UART_Receive_DMA(&huart1,rx_buffer,5) != HAL_OK)
+      {
+        Error_Handler();
+      }
+    }
+
+    
   }
   /* USER CODE END 3 */
 }
@@ -221,6 +252,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 
 }
 
@@ -262,6 +296,16 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     {
       // 2. 如果是，将发送完成标志设置为1
       uart_tx_done = 1;
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    // 1. 判断是否为 USART1
+    if(huart->Instance == USART1)
+    {
+      // 2. 如果是，将接收完成标志设置为1
+      uart_rx_done = 1;
     }
 }
 /* USER CODE END 4 */

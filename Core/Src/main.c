@@ -51,7 +51,8 @@ volatile uint8_t uart_tx_done = 0; //串口发送完成标志
 uint32_t last_tick = 0; //上次发送时间
 uint32_t led_last_tick = 0;
 uint8_t rx_buffer[64];
-volatile uint8_t uart_rx_done = 0; //串口接收完成标志
+volatile uint8_t uart_rx_done = 0;
+volatile uint16_t rx_len = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,8 +108,8 @@ int main(void)
   //   Error_Handler();
   // }
 
-  //2.启动串口dma接收
-  if(HAL_UART_Receive_DMA(&huart1,rx_buffer,5) != HAL_OK)
+  //
+  if(HAL_UARTEx_ReceiveToIdle_DMA(&huart1,rx_buffer,sizeof(rx_buffer)) != HAL_OK)
   {
     Error_Handler();
   }
@@ -149,7 +150,7 @@ int main(void)
       uart_rx_done = 0;
       //处理接收到的数据
       //这里简单的将接收到的数据再发送出去
-      if(HAL_UART_Transmit_DMA(&huart1, rx_buffer, 5) != HAL_OK)
+      if(HAL_UART_Transmit_DMA(&huart1, rx_buffer, rx_len) != HAL_OK)
       {
         Error_Handler();
       }
@@ -159,7 +160,7 @@ int main(void)
     {
       uart_tx_done = 0;
       //再次启动串口dma接收
-      if(HAL_UART_Receive_DMA(&huart1,rx_buffer,5) != HAL_OK)
+      if(HAL_UARTEx_ReceiveToIdle_DMA(&huart1,rx_buffer,sizeof(rx_buffer)) != HAL_OK)
       {
         Error_Handler();
       }
@@ -299,13 +300,17 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     // 1. 判断是否为 USART1
     if(huart->Instance == USART1)
     {
-      // 2. 如果是，将接收完成标志设置为1
-      uart_rx_done = 1;
+      if (HAL_UARTEx_GetRxEventType(huart) == HAL_UART_RXEVENT_IDLE ||
+        HAL_UARTEx_GetRxEventType(huart) == HAL_UART_RXEVENT_TC)
+      {
+        rx_len = Size;
+        uart_rx_done = 1;
+      }
     }
 }
 /* USER CODE END 4 */
